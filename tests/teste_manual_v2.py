@@ -1,25 +1,30 @@
 """
-Testes do Agente Reativo v2 (Etapa 3) com um simulador mínimo e independente.
+Testes manuais do Agente Reativo v2 (Etapa 3) com um simulador mínimo e
+independente.
 
 Serve para verificar a correção do agente (memória, inferência e decisão) antes
 da integração com o ambiente.py da equipe. Os números aqui NÃO são os
 resultados oficiais da Etapa 5 (que usa o gerador da Etapa 1, configuração fixa
 por tamanho e 30 execuções por ambiente).
 
-Uso:  python teste_agent_v2.py
+Este script é executado manualmente, não pelo pytest:
+
+    python tests/teste_manual_v2.py
 """
 
-import importlib.util
-import random
 import sys
+import random
 import statistics
 from collections import deque
 from pathlib import Path
 
-_spec = importlib.util.spec_from_file_location("agent_v2", Path(__file__).with_name("agent-v2.py"))
-agent_v2 = importlib.util.module_from_spec(_spec)
-sys.modules["agent_v2"] = agent_v2
-_spec.loader.exec_module(agent_v2)
+RAIZ = Path(__file__).resolve().parents[1]
+if str(RAIZ) not in sys.path:
+    sys.path.insert(0, str(RAIZ))
+
+from compat import carregar_agente_v2
+
+agent_v2 = carregar_agente_v2()
 AgenteReativoV2 = agent_v2.AgenteReativoV2
 
 DIRS = {"N": (0, 1), "S": (0, -1), "L": (1, 0), "O": (-1, 0)}

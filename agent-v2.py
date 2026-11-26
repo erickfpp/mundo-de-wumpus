@@ -86,9 +86,13 @@ class Celula:
 class MemoriaMundo:
     """Matriz-réplica do ambiente, construída pelo agente durante a exploração."""
 
-    def __init__(self, n: int | None = None):
+    def __init__(self, n: int | None = None,
+                 prior_poco: float = PRIORI_POCO,
+                 prior_wumpus: float = PRIORI_WUMPUS):
         self.celulas: dict[tuple[int, int], Celula] = {}
         self.limite_x = self.limite_y = (n - 1) if n else None
+        self.prior_poco = prior_poco
+        self.prior_wumpus = prior_wumpus
 
     # ---- acesso básico ---------------------------------------------------- #
     def cel(self, pos):
@@ -216,7 +220,7 @@ class MemoriaMundo:
             if vc.visitada and vc.brisa:
                 k = sum(1 for w in self.vizinhas(v) if not self.cel(w).sem_poco)
                 melhor = max(melhor, 1.0 / max(k, 1))
-        return melhor if melhor > 0 else PRIORI_POCO
+        return melhor if melhor > 0 else self.prior_poco
 
     def p_wumpus(self, pos) -> float:
         c = self.cel(pos)
@@ -230,7 +234,7 @@ class MemoriaMundo:
             if vc.visitada and vc.fedor and vc.fedor_valido:
                 k = sum(1 for w in self.vizinhas(v) if not self.cel(w).sem_wumpus)
                 melhor = max(melhor, 1.0 / max(k, 1))
-        return melhor if melhor > 0 else PRIORI_WUMPUS
+        return melhor if melhor > 0 else self.prior_wumpus
 
     def risco(self, pos) -> float:
         return 1.0 - (1.0 - self.p_poco(pos)) * (1.0 - self.p_wumpus(pos))
@@ -307,22 +311,34 @@ class AgenteReativoV2:
     """
 
     def __init__(self, n: int | None = None, flechas: int = 1,
-                 tolerancia_risco: float = 0.0, semente: int | None = None,
-                 max_passos: int | None = None, registrar_log: bool = False):
+                 tolerancia_risco: float = 0.4, semente: int | None = None,
+                 max_passos: int | None = None, registrar_log: bool = False,
+                 prior_poco: float = PRIORI_POCO,
+                 prior_wumpus: float = PRIORI_WUMPUS,
+                 peso_informacao: float = PESO_INFORMACAO,
+                 limiar_tiro: float = LIMIAR_TIRO):
         """
         n                 tamanho do ambiente, se o ambiente quiser informar (opcional)
         flechas           quantidade de flechas (a especificação do projeto usa 1)
         tolerancia_risco  risco máximo aceito para entrar em casa não provada segura
-                          (0 = nunca arrisca [padrão: maximiza a pontuação e nunca morre];
-                          valores maiores aumentam a chance de achar o ouro ao custo de morrer mais)
+                          (0 = nunca arrisca; padrão 0.4 = risco moderado, que
+                          permite explorar quando não há casas provadamente seguras)
         semente           semente do desempate aleatório entre alvos de mesma utilidade
         max_passos        trava de segurança contra ciclos (padrão: 8 * n^2, ou 800 sem n)
+        prior_poco        risco-base de poço em casa sem evidência (usado pela heurística)
+        prior_wumpus      risco-base de Wumpus em casa sem evidência
+        peso_informacao   peso do ganho de informação na escolha da casa a explorar
+        limiar_tiro       probabilidade mínima para gastar a flecha em uma casa
         """
-        self.memoria = MemoriaMundo(n)
+        self.memoria = MemoriaMundo(n, prior_poco=prior_poco, prior_wumpus=prior_wumpus)
         self.pos = CASA
         self.flechas = flechas
         self.tolerancia_risco = tolerancia_risco
+        self.peso_informacao = peso_informacao
+        self.limiar_tiro = limiar_tiro
         self.rng = random.Random(semente)
+        self.semente = semente
+        self.n = n
         self.max_passos = max_passos or (8 * n * n if n else 800)
         self.tem_ouro = False
         self.desistiu = False
@@ -440,7 +456,7 @@ class AgenteReativoV2:
 
     def _r4_explorar_seguro(self):
         """Escolhe a casa segura ainda não visitada de menor custo ajustado:
-        custo = distância - PESO_INFORMACAO * (vizinhas ainda desconhecidas)."""
+        custo = distância - peso_informacao * (vizinhas ainda desconhecidas)."""
         m = self.memoria
         dist, pai = m.bfs(self.pos)
         candidatos = [c for c in dist if c != self.pos and not m.cel(c).visitada]
@@ -450,7 +466,7 @@ class AgenteReativoV2:
         def custo(c):
             desconhecidas = sum(1 for v in m.vizinhas(c)
                                 if not m.cel(v).visitada and not m.segura(v))
-            return dist[c] - PESO_INFORMACAO * desconhecidas
+            return dist[c] - self.peso_informacao * desconhecidas
 
         melhor = min(custo(c) for c in candidatos)
         alvo = self.rng.choice([c for c in candidatos if custo(c) == melhor])
@@ -468,7 +484,7 @@ class AgenteReativoV2:
             if c.visitada or c.sem_wumpus or c.poco_certo or not m.dentro(pos):
                 continue
             pw = m.p_wumpus(pos)
-            if pw < LIMIAR_TIRO:
+            if pw < self.limiar_tiro:
                 continue
             for atirador in m.vizinhas(pos):
                 if atirador in dist:
