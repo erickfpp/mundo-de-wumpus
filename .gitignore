@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Ambiente virtual e artefatos locais
+.coverage
+htmlcov/
+
+# PDF da disciplina (material de apoio, não versionado)
+AI 2026.pdf
+
+# Resultados de experimentos e genomas treinados
+resultados/*
+!resultados/.gitkeep
+genomas/*.json
+!genomas/.gitkeep
+
+# Sistema operacional / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
